@@ -10,23 +10,26 @@ class Penjualan extends Model
     use HasFactory;
 
     protected $fillable = [
-        'tanggal_penjualan',
-        'no_faktur',
-        'nama_pelanggan',
-        'nama_barang',
-        'jumlah',
-        'harga_satuan',
-        'total',
-        'metode_pembayaran',
-        'status',
-        'keterangan',
-        'user_id',
-    ];
-
-    protected $casts = [
-        'tanggal_penjualan' => 'date',
-        'harga_satuan' => 'decimal:2',
-        'total' => 'decimal:2',
+        'kategori',
+        'customer',
+        'brand',
+        'part',
+        'description',
+        'ytd',
+        'january',
+        'february',
+        'march',
+        'april',
+        'may',
+        'june',
+        'july',
+        'august',
+        'september',
+        'october',
+        'mtd',
+        'mtd_export',
+        'mtd_domestic',
+        'user_id'
     ];
 
     public function user()
@@ -34,12 +37,36 @@ class Penjualan extends Model
         return $this->belongsTo(User::class);
     }
 
-    protected static function boot()
+    // Accessor untuk total penjualan bulanan
+    public function getTotalBulananAttribute()
     {
-        parent::boot();
+        return $this->january + $this->february + $this->march + $this->april + 
+               $this->may + $this->june + $this->july + $this->august + 
+               $this->september + $this->october;
+    }
 
-        static::saving(function ($model) {
-            $model->total = $model->jumlah * $model->harga_satuan;
-        });
+    // Scope untuk filter
+    public function scopeByKategori($query, $kategori)
+    {
+        if ($kategori && $kategori !== 'Semua Kategori') {
+            return $query->where('kategori', $kategori);
+        }
+        return $query;
+    }
+
+    public function scopeByBrand($query, $brand)
+    {
+        if ($brand && $brand !== 'Semua Brand') {
+            return $query->where('brand', $brand);
+        }
+        return $query;
+    }
+
+    public function scopeByCustomer($query, $customer)
+    {
+        if ($customer && $customer !== 'Semua Customer') {
+            return $query->where('customer', 'like', '%' . $customer . '%');
+        }
+        return $query;
     }
 }

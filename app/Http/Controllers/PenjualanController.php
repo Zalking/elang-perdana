@@ -6,6 +6,9 @@ use App\Models\Penjualan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Imports\PenjualanImport;
+use App\Exports\PenjualanExport;
 
 class PenjualanController extends Controller
 {
@@ -23,29 +26,21 @@ class PenjualanController extends Controller
         if ($request->has('search') && $request->search != '') {
             $search = $request->search;
             $query->where(function($q) use ($search) {
-                $q->where('no_faktur', 'like', '%' . $search . '%')
-                  ->orWhere('nama_pelanggan', 'like', '%' . $search . '%')
-                  ->orWhere('nama_barang', 'like', '%' . $search . '%');
+                $q->where('customer', 'like', '%' . $search . '%')
+                  ->orWhere('brand', 'like', '%' . $search . '%')
+                  ->orWhere('part', 'like', '%' . $search . '%')
+                  ->orWhere('description', 'like', '%' . $search . '%');
             });
         }
 
-        // Filter status (sesuai tampilan: "Semua Status")
-        if ($request->has('status') && $request->status != '' && $request->status != 'Semua Status') {
-            $query->where('status', $request->status);
+        // Filter kategori
+        if ($request->has('kategori') && $request->kategori != '' && $request->kategori != 'Semua Kategori') {
+            $query->where('kategori', $request->kategori);
         }
 
-        // Filter metode pembayaran (sesuai tampilan: "Semua Metode")
-        if ($request->has('metode_pembayaran') && $request->metode_pembayaran != '' && $request->metode_pembayaran != 'Semua Metode') {
-            $query->where('metode_pembayaran', $request->metode_pembayaran);
-        }
-
-        // Filter tanggal
-        if ($request->has('start_date') && $request->start_date != '') {
-            $query->whereDate('tanggal_penjualan', '>=', $request->start_date);
-        }
-
-        if ($request->has('end_date') && $request->end_date != '') {
-            $query->whereDate('tanggal_penjualan', '<=', $request->end_date);
+        // Filter brand
+        if ($request->has('brand') && $request->brand != '' && $request->brand != 'Semua Brand') {
+            $query->where('brand', $request->brand);
         }
 
         // Clone query untuk menghitung total sebelum pagination
@@ -54,64 +49,40 @@ class PenjualanController extends Controller
         $penjualans = $query->latest()->paginate(10);
 
         // Hitung totals dari query yang difilter
-        $totalPenjualan = $totalQuery->sum('total');
-        $totalTransaksi = $totalQuery->count();
-        
-        // Penjualan hari ini (tanpa filter)
-        $penjualanHariIni = Penjualan::when($user->role === 'user', function($q) use ($user) {
-            $q->where('user_id', $user->id);
-        })->whereDate('tanggal_penjualan', today())->sum('total');
+        $totalYTD = $totalQuery->sum('ytd');
+        $totalMTD = $totalQuery->sum('mtd');
+        $totalRecords = $totalQuery->count();
+
+        // Get unique values for filters
+        $kategoris = Penjualan::distinct()->pluck('kategori');
+        $brands = Penjualan::distinct()->pluck('brand');
+        $customers = Penjualan::distinct()->pluck('customer');
 
         return view('penjualan.index', compact(
             'penjualans', 
-            'totalPenjualan', 
-            'totalTransaksi', 
-            'penjualanHariIni'
+            'totalYTD', 
+            'totalMTD',
+            'totalRecords',
+            'kategoris',
+            'brands',
+            'customers'
         ));
     }
 
-    public function create()
-    {
-        $lastPenjualan = Penjualan::latest()->first();
-        $nextId = $lastPenjualan ? $lastPenjualan->id + 1 : 1;
-        $noFaktur = 'INV-' . date('Ymd') . '-' . str_pad($nextId, 4, '0', STR_PAD_LEFT);
-
-        return view('penjualan.create', compact('noFaktur'));
-    }
-
-    public function store(Request $request)
+    public function import(Request $request)
     {
         $request->validate([
-            'tanggal_penjualan' => 'required|date',
-            'no_faktur' => 'required|string|unique:penjualans',
-            'nama_pelanggan' => 'required|string|max:255',
-            'nama_barang' => 'required|string|max:255',
-            'jumlah' => 'required|integer|min:1',
-            'harga_satuan' => 'required|numeric|min:0',
-            'metode_pembayaran' => 'required|in:Tunai,Transfer,Kredit',
-            'status' => 'required|in:Lunas,Pending,Dibatalkan',
-            'keterangan' => 'nullable|string',
+            'file' => 'required|mimes:xlsx,xls'
         ]);
 
-        // Hitung total otomatis
-        $total = $request->jumlah * $request->harga_satuan;
-
-        Penjualan::create([
-            'tanggal_penjualan' => $request->tanggal_penjualan,
-            'no_faktur' => $request->no_faktur,
-            'nama_pelanggan' => $request->nama_pelanggan,
-            'nama_barang' => $request->nama_barang,
-            'jumlah' => $request->jumlah,
-            'harga_satuan' => $request->harga_satuan,
-            'total' => $total, // Ditambahkan
-            'metode_pembayaran' => $request->metode_pembayaran,
-            'status' => $request->status,
-            'keterangan' => $request->keterangan,
-            'user_id' => Auth::id(),
-        ]);
-
-        return redirect()->route('penjualan.index')
-            ->with('success', 'Data penjualan berhasil ditambahkan!');
+        try {
+            Excel::import(new PenjualanImport, $request->file('file'));
+            return redirect()->route('penjualan.index')
+                ->with('success', 'Data penjualan berhasil diimport!');
+        } catch (\Exception $e) {
+            return redirect()->route('penjualan.index')
+                ->with('error', 'Error importing file: ' . $e->getMessage());
+        }
     }
 
     public function show($id)
@@ -124,51 +95,6 @@ class PenjualanController extends Controller
         }
 
         return view('penjualan.show', compact('penjualan'));
-    }
-
-    public function edit($id)
-    {
-        $penjualan = Penjualan::findOrFail($id);
-        $user = Auth::user();
-
-        if ($user->role === 'user' && $penjualan->user_id !== $user->id) {
-            abort(403, 'Unauthorized action.');
-        }
-
-        return view('penjualan.edit', compact('penjualan'));
-    }
-
-    public function update(Request $request, $id)
-    {
-        $penjualan = Penjualan::findOrFail($id);
-        $user = Auth::user();
-
-        if ($user->role === 'user' && $penjualan->user_id !== $user->id) {
-            abort(403, 'Unauthorized action.');
-        }
-
-        $request->validate([
-            'tanggal_penjualan' => 'required|date',
-            'no_faktur' => 'required|string|unique:penjualans,no_faktur,' . $penjualan->id,
-            'nama_pelanggan' => 'required|string|max:255',
-            'nama_barang' => 'required|string|max:255',
-            'jumlah' => 'required|integer|min:1',
-            'harga_satuan' => 'required|numeric|min:0',
-            'metode_pembayaran' => 'required|in:Tunai,Transfer,Kredit',
-            'status' => 'required|in:Lunas,Pending,Dibatalkan',
-            'keterangan' => 'nullable|string',
-        ]);
-
-        // Hitung total otomatis
-        $total = $request->jumlah * $request->harga_satuan;
-
-        $data = $request->all();
-        $data['total'] = $total;
-
-        $penjualan->update($data);
-
-        return redirect()->route('penjualan.index')
-            ->with('success', 'Data penjualan berhasil diupdate!');
     }
 
     public function destroy($id)
@@ -187,89 +113,121 @@ class PenjualanController extends Controller
     }
 
     public function dashboard()
-{
-    $user = Auth::user();
-    $query = Penjualan::query();
+    {
+        $user = Auth::user();
+        $query = Penjualan::query();
 
-    if ($user->role === 'user') {
-        $query->where('user_id', $user->id);
-    }
-
-    $totalPenjualan = $query->sum('total');
-    $totalTransaksi = $query->count();
-    
-    // Hitung total quantity (jumlah barang dalam pcs)
-    $totalQuantity = $query->sum('jumlah');
-    
-    // Hitung rata-rata penjualan per bulan
-    $rataRataPenjualan = 0;
-    $totalBulan = Penjualan::when($user->role === 'user', function($q) use ($user) {
-        $q->where('user_id', $user->id);
-    })->distinct()->selectRaw('YEAR(tanggal_penjualan) as year, MONTH(tanggal_penjualan) as month')->count();
-    
-    if ($totalBulan > 0) {
-        $rataRataPenjualan = $totalPenjualan / $totalBulan;
-    }
-
-    $penjualanHariIni = Penjualan::when($user->role === 'user', function($q) use ($user) {
-        $q->where('user_id', $user->id);
-    })->whereDate('tanggal_penjualan', today())->sum('total');
-    
-    $penjualanBulanIni = Penjualan::when($user->role === 'user', function($q) use ($user) {
-        $q->where('user_id', $user->id);
-    })->whereYear('tanggal_penjualan', date('Y'))
-      ->whereMonth('tanggal_penjualan', date('m'))
-      ->sum('total');
-
-    // Chart data 7 hari terakhir - untuk grafik kombinasi
-    $chartData = [];
-    for ($i = 6; $i >= 0; $i--) {
-        $date = Carbon::now()->subDays($i);
-        
-        // Data untuk hari tertentu
-        $dayQuery = Penjualan::when($user->role === 'user', function($q) use ($user) {
-            $q->where('user_id', $user->id);
-        })->whereDate('tanggal_penjualan', $date);
-        
-        $totalHari = $dayQuery->sum('total');
-        $quantityHari = $dayQuery->sum('jumlah');
-        
-        $chartData['labels'][] = $date->format('d M');
-        $chartData['quantity'][] = $quantityHari; // Untuk grafik batang (pcs)
-        $chartData['total'][] = $totalHari; // Untuk grafik line (rupiah)
-    }
-
-    // Data untuk rata-rata per bulan (contoh data statis atau hitung dari database)
-    $bulanLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-    $bulanAverages = [];
-    
-    for ($i = 1; $i <= 12; $i++) {
-        $bulanData = Penjualan::when($user->role === 'user', function($q) use ($user) {
-            $q->where('user_id', $user->id);
-        })->whereYear('tanggal_penjualan', date('Y'))
-          ->whereMonth('tanggal_penjualan', $i)
-          ->get();
-        
-        if ($bulanData->count() > 0) {
-            $bulanAverages[] = $bulanData->sum('total') / $bulanData->count();
-        } else {
-            $bulanAverages[] = 0;
+        if ($user->role === 'user') {
+            $query->where('user_id', $user->id);
         }
+
+        // Total calculations
+        $totalYTD = $query->sum('ytd');
+        $totalMTD = $query->sum('mtd');
+        $totalRecords = $query->count();
+        
+        // Export vs Domestic
+        $totalExport = Penjualan::when($user->role === 'user', function($q) use ($user) {
+            $q->where('user_id', $user->id);
+        })->where('kategori', 'Export')->sum('mtd');
+        
+        $totalDomestic = Penjualan::when($user->role === 'user', function($q) use ($user) {
+            $q->where('user_id', $user->id);
+        })->where('kategori', 'Domestic')->sum('mtd');
+
+        // Top Brands
+        $topBrands = Penjualan::when($user->role === 'user', function($q) use ($user) {
+            $q->where('user_id', $user->id);
+        })
+        ->selectRaw('brand, SUM(ytd) as total_ytd, SUM(mtd) as total_mtd')
+        ->groupBy('brand')
+        ->orderByDesc('total_ytd')
+        ->limit(5)
+        ->get();
+
+        // Monthly data for chart
+        $monthlyData = [];
+        $months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October'];
+        
+        foreach ($months as $month) {
+            $monthlyData[$month] = Penjualan::when($user->role === 'user', function($q) use ($user) {
+                $q->where('user_id', $user->id);
+            })->sum(strtolower($month));
+        }
+
+        // Recent data
+        $recentPenjualan = $query->with('user')->latest()->take(5)->get();
+
+        return view('penjualan.dashboard', compact(
+            'totalYTD', 
+            'totalMTD',
+            'totalRecords',
+            'totalExport',
+            'totalDomestic',
+            'topBrands',
+            'monthlyData',
+            'recentPenjualan'
+        ));
+    }
+    public function apiMonthlyData()
+    {
+        $user = Auth::user();
+        
+        $monthlyData = [];
+        $months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october'];
+        $monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt'];
+        
+        foreach ($months as $index => $month) {
+            $monthlyData[$monthLabels[$index]] = Penjualan::when($user->role === 'user', function($q) use ($user) {
+                $q->where('user_id', $user->id);
+            })->sum($month);
+        }
+        
+        return response()->json([
+            'labels' => array_keys($monthlyData),
+            'data' => array_values($monthlyData)
+        ]);
     }
 
-    $recentPenjualan = $query->with('user')->latest()->take(5)->get();
+    public function apiBrandPerformance()
+    {
+        $user = Auth::user();
+        
+        $brands = Penjualan::when($user->role === 'user', function($q) use ($user) {
+            $q->where('user_id', $user->id);
+        })
+        ->selectRaw('brand, SUM(ytd) as total_ytd, SUM(mtd) as total_mtd')
+        ->groupBy('brand')
+        ->orderByDesc('total_ytd')
+        ->limit(10)
+        ->get();
+        
+        return response()->json($brands);
+    }
 
-    return view('penjualan.dashboard', compact(
-        'totalPenjualan', 
-        'totalTransaksi', 
-        'totalQuantity',
-        'rataRataPenjualan',
-        'penjualanHariIni',
-        'penjualanBulanIni',
-        'chartData',
-        'recentPenjualan',
-        'bulanLabels',
-        'bulanAverages'
-    ));
-}
+    public function apiCustomerPerformance()
+    {
+        $user = Auth::user();
+        
+        $customers = Penjualan::when($user->role === 'user', function($q) use ($user) {
+            $q->where('user_id', $user->id);
+        })
+        ->selectRaw('customer, SUM(ytd) as total_ytd, SUM(mtd) as total_mtd')
+        ->groupBy('customer')
+        ->orderByDesc('total_ytd')
+        ->limit(10)
+        ->get();
+        
+        return response()->json($customers);
+    }
+
+    public function exportExcel()
+    {
+        return Excel::download(new PenjualanExport, 'penjualan-ban-' . date('Y-m-d') . '.xlsx');
+    }
+
+    public function downloadTemplate()
+    {
+        return response()->download(public_path('templates/template-penjualan-ban.xlsx'));
+    }
 }

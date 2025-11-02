@@ -1,9 +1,9 @@
 @extends('layouts.app')
 
-@section('title', 'Dashboard Penjualan')
+@section('title', 'Dashboard Penjualan Ban')
 
 @section('content_header')
-    <h1>Dashboard Penjualan</h1>
+    <h1>Dashboard Penjualan Ban</h1>
 @endsection
 
 @section('breadcrumb')
@@ -13,12 +13,12 @@
 
 @section('content')
     <div class="row">
-        <!-- Total Penjualan Card -->
+        <!-- Total YTD Card -->
         <div class="col-lg-3 col-6">
             <div class="small-box bg-info">
                 <div class="inner">
-                    <h3>Rp {{ number_format($totalPenjualan, 0, ',', '.') }}</h3>
-                    <p>Total Penjualan</p>
+                    <h3>{{ number_format($totalYTD, 0, ',', '.') }}</h3>
+                    <p>Total YTD</p>
                 </div>
                 <div class="icon">
                     <i class="fas fa-chart-line"></i>
@@ -29,12 +29,12 @@
             </div>
         </div>
 
-        <!-- Total Transaksi Card -->
+        <!-- Total MTD Card -->
         <div class="col-lg-3 col-6">
             <div class="small-box bg-success">
                 <div class="inner">
-                    <h3>{{ $totalTransaksi }}</h3>
-                    <p>Total Transaksi</p>
+                    <h3>{{ number_format($totalMTD, 0, ',', '.') }}</h3>
+                    <p>Total MTD</p>
                 </div>
                 <div class="icon">
                     <i class="fas fa-shopping-cart"></i>
@@ -45,12 +45,12 @@
             </div>
         </div>
 
-        <!-- Total Quantity Card -->
+        <!-- Total Records Card -->
         <div class="col-lg-3 col-6">
             <div class="small-box bg-warning">
                 <div class="inner">
-                    <h3>{{ number_format($totalQuantity, 0, ',', '.') }} pcs</h3>
-                    <p>Total Barang Terjual</p>
+                    <h3>{{ number_format($totalRecords, 0, ',', '.') }}</h3>
+                    <p>Total Records</p>
                 </div>
                 <div class="icon">
                     <i class="fas fa-boxes"></i>
@@ -61,15 +61,16 @@
             </div>
         </div>
 
-        <!-- Rata-rata Penjualan Card -->
+        <!-- Export vs Domestic Card -->
         <div class="col-lg-3 col-6">
             <div class="small-box bg-danger">
                 <div class="inner">
-                    <h3>Rp {{ number_format($rataRataPenjualan, 0, ',', '.') }}</h3>
-                    <p>Rata-rata Penjualan/Bulan</p>
+                    <h3>{{ number_format($totalExport + $totalDomestic, 0, ',', '.') }}</h3>
+                    <p>MTD Export/Domestic</p>
+                    <small>Export: {{ number_format($totalExport, 0, ',', '.') }} | Domestic: {{ number_format($totalDomestic, 0, ',', '.') }}</small>
                 </div>
                 <div class="icon">
-                    <i class="fas fa-calculator"></i>
+                    <i class="fas fa-globe"></i>
                 </div>
                 <a href="{{ route('penjualan.index') }}" class="small-box-footer">
                     More info <i class="fas fa-arrow-circle-right"></i>
@@ -79,37 +80,65 @@
     </div>
 
     <div class="row">
-        <!-- Chart Section -->
+        <!-- Monthly Sales Chart -->
         <div class="col-md-8">
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title">Grafik Penjualan 7 Hari Terakhir</h3>
+                    <h3 class="card-title">Grafik Penjualan Bulanan</h3>
                 </div>
                 <div class="card-body">
-                    <canvas id="salesChart" height="200"></canvas>
+                    <canvas id="monthlyChart" height="200"></canvas>
                 </div>
             </div>
         </div>
 
-        <!-- Recent Penjualan -->
+        <!-- Top Brands -->
         <div class="col-md-4">
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title">Transaksi Terbaru</h3>
-                    <div class="card-tools">
-                        <a href="{{ route('penjualan.create') }}" class="btn btn-sm btn-primary">
-                            <i class="fas fa-plus"></i> Tambah
-                        </a>
-                    </div>
+                    <h3 class="card-title">Top 5 Brands (YTD)</h3>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-striped table-valign-middle">
                             <thead>
                                 <tr>
-                                    <th>Faktur</th>
-                                    <th>Total</th>
-                                    <th>Qty</th>
+                                    <th>Brand</th>
+                                    <th>YTD</th>
+                                    <th>MTD</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse($topBrands as $brand)
+                                <tr>
+                                    <td>{{ $brand->brand }}</td>
+                                    <td>{{ number_format($brand->total_ytd, 0, ',', '.') }}</td>
+                                    <td>{{ number_format($brand->total_mtd, 0, ',', '.') }}</td>
+                                </tr>
+                                @empty
+                                <tr>
+                                    <td colspan="3" class="text-center">Belum ada data</td>
+                                </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Data -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h3 class="card-title">Data Terbaru</h3>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-valign-middle">
+                            <thead>
+                                <tr>
+                                    <th>Customer</th>
+                                    <th>YTD</th>
+                                    <th>MTD</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -117,17 +146,17 @@
                                 <tr>
                                     <td>
                                         <a href="{{ route('penjualan.show', $penjualan->id) }}">
-                                            {{ $penjualan->no_faktur }}
+                                            {{ \Str::limit($penjualan->customer, 20) }}
                                         </a>
                                         <br>
-                                        <small class="text-muted">{{ $penjualan->nama_pelanggan }}</small>
+                                        <small class="text-muted">{{ $penjualan->brand }}</small>
                                     </td>
-                                    <td>Rp {{ number_format($penjualan->total, 0, ',', '.') }}</td>
-                                    <td>{{ number_format($penjualan->jumlah, 0, ',', '.') }} pcs</td>
+                                    <td>{{ number_format($penjualan->ytd, 0, ',', '.') }}</td>
+                                    <td>{{ number_format($penjualan->mtd, 0, ',', '.') }}</td>
                                 </tr>
                                 @empty
                                 <tr>
-                                    <td colspan="3" class="text-center">Belum ada transaksi</td>
+                                    <td colspan="3" class="text-center">Belum ada data</td>
                                 </tr>
                                 @endforelse
                             </tbody>
@@ -138,36 +167,27 @@
         </div>
     </div>
 
-    <!-- Quick Actions -->
+    <!-- Import Section -->
     <div class="row">
         <div class="col-md-12">
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title">Aksi Cepat</h3>
+                    <h3 class="card-title">Import Data Excel</h3>
                 </div>
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-lg-3 col-6">
-                            <a href="{{ route('penjualan.create') }}" class="btn btn-app bg-success">
-                                <i class="fas fa-plus"></i> Tambah Penjualan
-                            </a>
+                    <form action="{{ route('penjualan.import') }}" method="POST" enctype="multipart/form-data">
+                        @csrf
+                        <div class="form-group">
+                            <label for="file">Pilih File Excel</label>
+                            <input type="file" name="file" class="form-control" accept=".xlsx,.xls" required>
+                            <small class="form-text text-muted">
+                                Format file harus sesuai dengan template Excel penjualan ban
+                            </small>
                         </div>
-                        <div class="col-lg-3 col-6">
-                            <a href="{{ route('penjualan.index') }}" class="btn btn-app bg-info">
-                                <i class="fas fa-list"></i> Lihat Semua
-                            </a>
-                        </div>
-                        <div class="col-lg-3 col-6">
-                            <a href="{{ route('penjualan.index') }}?status=Lunas" class="btn btn-app bg-warning">
-                                <i class="fas fa-check"></i> Status Lunas
-                            </a>
-                        </div>
-                        <div class="col-lg-3 col-6">
-                            <a href="{{ route('penjualan.index') }}?metode_pembayaran=Tunai" class="btn btn-app bg-primary">
-                                <i class="fas fa-money-bill"></i> Pembayaran Tunai
-                            </a>
-                        </div>
-                    </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-upload"></i> Import Data
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>
@@ -177,78 +197,35 @@
 @push('scripts')
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        var ctx = document.getElementById('salesChart');
+        var ctx = document.getElementById('monthlyChart');
         if (ctx) {
             ctx = ctx.getContext('2d');
             
-            var chartLabels = <?php echo json_encode($chartData['labels'] ?? []); ?>;
-            var quantityData = <?php echo json_encode($chartData['quantity'] ?? []); ?>;
-            var totalData = <?php echo json_encode($chartData['total'] ?? []); ?>;
+            var monthlyData = <?php echo json_encode($monthlyData); ?>;
+            var labels = Object.keys(monthlyData);
+            var data = Object.values(monthlyData);
 
             var chart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: chartLabels,
-                    datasets: [
-                        {
-                            label: 'Penjualan (pcs)',
-                            data: quantityData,
-                            backgroundColor: 'rgba(54, 162, 235, 0.7)',
-                            borderColor: 'rgba(54, 162, 235, 1)',
-                            borderWidth: 1,
-                            yAxisID: 'y'
-                        },
-                        {
-                            label: 'Total Penjualan (Rp)',
-                            data: totalData,
-                            type: 'line',
-                            backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                            borderColor: 'rgba(255, 99, 132, 1)',
-                            borderWidth: 2,
-                            tension: 0.4,
-                            fill: false,
-                            yAxisID: 'y1'
-                        }
-                    ]
+                    labels: labels,
+                    datasets: [{
+                        label: 'Penjualan Bulanan',
+                        data: data,
+                        backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    interaction: {
-                        mode: 'index',
-                        intersect: false,
-                    },
                     scales: {
                         y: {
-                            type: 'linear',
-                            display: true,
-                            position: 'left',
-                            title: {
-                                display: true,
-                                text: 'Quantity (pcs)'
-                            },
                             beginAtZero: true,
                             ticks: {
                                 callback: function(value) {
-                                    return value.toLocaleString('id-ID') + ' pcs';
-                                }
-                            }
-                        },
-                        y1: {
-                            type: 'linear',
-                            display: true,
-                            position: 'right',
-                            title: {
-                                display: true,
-                                text: 'Total (Rp)'
-                            },
-                            beginAtZero: true,
-                            grid: {
-                                drawOnChartArea: false,
-                            },
-                            ticks: {
-                                callback: function(value) {
-                                    return 'Rp ' + value.toLocaleString('id-ID');
+                                    return value.toLocaleString('id-ID');
                                 }
                             }
                         }
@@ -257,18 +234,7 @@
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) {
-                                        label += ': ';
-                                    }
-                                    if (context.datasetIndex === 0) {
-                                        // Untuk quantity (pcs)
-                                        label += context.parsed.y.toLocaleString('id-ID') + ' pcs';
-                                    } else {
-                                        // Untuk total (Rp)
-                                        label += 'Rp ' + context.parsed.y.toLocaleString('id-ID');
-                                    }
-                                    return label;
+                                    return 'Penjualan: ' + context.parsed.y.toLocaleString('id-ID');
                                 }
                             }
                         }

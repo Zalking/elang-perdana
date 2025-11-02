@@ -57,16 +57,28 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/{id}', [StokBanController::class, 'destroy'])->name('stokban.destroy');
     });
     
-    // Penjualan Routes
+    // Penjualan Routes - UPDATED untuk data Excel ban
     Route::prefix('penjualan')->group(function () {
         Route::get('/dashboard', [PenjualanController::class, 'dashboard'])->name('penjualan.dashboard');
         Route::get('/', [PenjualanController::class, 'index'])->name('penjualan.index');
+        
+        // Import/Export Excel Routes
+        Route::post('/import', [PenjualanController::class, 'import'])->name('penjualan.import');
+        Route::get('/export', [PenjualanController::class, 'exportExcel'])->name('penjualan.export');
+        Route::get('/download-template', [PenjualanController::class, 'downloadTemplate'])->name('penjualan.download-template');
+        
+        // CRUD Routes (opsional - jika masih diperlukan)
         Route::get('/create', [PenjualanController::class, 'create'])->name('penjualan.create');
         Route::post('/', [PenjualanController::class, 'store'])->name('penjualan.store');
         Route::get('/{id}', [PenjualanController::class, 'show'])->name('penjualan.show');
         Route::get('/{id}/edit', [PenjualanController::class, 'edit'])->name('penjualan.edit');
         Route::put('/{id}', [PenjualanController::class, 'update'])->name('penjualan.update');
         Route::delete('/{id}', [PenjualanController::class, 'destroy'])->name('penjualan.destroy');
+        
+        // API Routes untuk chart dan analytics
+        Route::get('/api/monthly-data', [PenjualanController::class, 'apiMonthlyData'])->name('penjualan.api.monthly');
+        Route::get('/api/brand-performance', [PenjualanController::class, 'apiBrandPerformance'])->name('penjualan.api.brands');
+        Route::get('/api/customer-performance', [PenjualanController::class, 'apiCustomerPerformance'])->name('penjualan.api.customers');
     });
     
     // Laporan Routes

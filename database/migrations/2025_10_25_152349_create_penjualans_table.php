@@ -6,26 +6,35 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    public function up(): void
+    public function up()
     {
         Schema::create('penjualans', function (Blueprint $table) {
             $table->id();
-            $table->date('tanggal_penjualan');
-            $table->string('no_faktur')->unique();
-            $table->string('nama_pelanggan');
-            $table->string('nama_barang');
-            $table->integer('jumlah');
-            $table->decimal('harga_satuan', 15, 2);
-            $table->decimal('total', 15, 2);
-            $table->enum('metode_pembayaran', ['Tunai', 'Transfer', 'Kredit'])->default('Tunai');
-            $table->enum('status', ['Lunas', 'Pending', 'Dibatalkan'])->default('Lunas');
-            $table->text('keterangan')->nullable();
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->string('kategori'); // Export/Domestic
+            $table->string('customer');
+            $table->string('brand'); // FORCEUM, ACCELERA, ZEETEX, ARMSTRONG
+            $table->string('part');
+            $table->text('description');
+            $table->integer('ytd')->default(0);
+            $table->integer('january')->default(0);
+            $table->integer('february')->default(0);
+            $table->integer('march')->default(0);
+            $table->integer('april')->default(0);
+            $table->integer('may')->default(0);
+            $table->integer('june')->default(0);
+            $table->integer('july')->default(0);
+            $table->integer('august')->default(0);
+            $table->integer('september')->default(0);
+            $table->integer('october')->default(0);
+            $table->integer('mtd')->default(0);
+            $table->integer('mtd_export')->default(0);
+            $table->integer('mtd_domestic')->default(0);
             $table->timestamps();
+            $table->foreignId('user_id')->constrained()->onDelete('cascade');
         });
     }
 
-    public function down(): void
+    public function down()
     {
         Schema::dropIfExists('penjualans');
     }
